@@ -17,7 +17,7 @@ MqttClient mqttClient(wifiClient);
 
 int status = WL_IDLE_STATUS;
 
-const char broker[] = "192.168.100.10";
+const char broker[] = "192.168.100.10"; // IP address of the mqtt host
 int mqtt_port = 1883;
 
 const char temperature[] = "measurement/temperature"; 
@@ -30,18 +30,9 @@ const char steps[] = "measurement/steps";
 const char biking[] = "measurement/biking";
 const char idling[] = "measurement/idling";
 
+const char topic[] = "test/topic";
 
-const char* topics[] = {
-  temperature
-  // sound,
-  // heart,
-  // sleep,
-  // walking,
-  // jogging,
-  // steps,
-  // biking,
-  // idling
-  };
+char buffer[10];
 
 
 unsigned long millisCounter = 0;
@@ -69,20 +60,7 @@ bool wifiConnect(){
 }
 
 
-bool mqttSubscribe(const char** topics, int topicCount) {
-  bool allSubscribed = true;
-  for (int i = 0; i < topicCount; i++) {
-    if (!mqttClient.subscribe(topics[i])) {
-      Serial.print("Failed to subscribe to topic: ");
-      Serial.println(topics[i]);
-      allSubscribed = false;
-    } else {
-      Serial.print("Subscribed to topic: ");
-      Serial.println(topics[i]);
-    }
-  }
-  return allSubscribed;
-}
+
 
 bool mqttConnect() {
   // Serial.print("checking wifi...");
@@ -122,24 +100,13 @@ void setup() {
   if(mqttConnect()){
     mqtt_connected = true;
   } 
-  
-
-  int topicCount = sizeof(topics) / sizeof(topics[0]);
-  if(mqttSubscribe(topics, topicCount)){
-    subscribed = true;
-  } 
+   
 
 }
 
 void loop() {
 
-  if(subscribed){
-    digitalWrite(LEDB, HIGH);
-    delay(100);
-    digitalWrite(LEDB, LOW);
-    delay(1000);
-  }
-
+  mqttClient.poll();
 
   if(wifi_connected){
     digitalWrite(LEDG, HIGH);
@@ -161,40 +128,26 @@ void loop() {
   }
 
 
-  // mqttClient.loop();
+  if(!mqttClient.connected()){
+    mqttConnect();
+  }
 
-  // if(!mqttClient.connected()){
-  //   mqttConnect();
-  // }
+  // publish a message roughly every second.
+  if (millis() - millisCounter >= 1000) {
+    millisCounter = millis();
+    secondsCounter++;
+    if(IMU.temperatureAvailable()){
+      // int temperature_int = 0;
+      float temperature_float = 0;
+      // IMU.readTemperature(temperature_int);
+      IMU.readTemperatureFloat(temperature_float);
 
-    // publish a message roughly every second.
-  // if (millis() - millisCounter > 1000) {
-  //   millisCounter = millis();
-  //   secondsCounter++;
-  //   mqttClient.publish("/hello", "world");
-  // }
-
-  // Publish a message every 5 seconds
-  // if(secondsCounter >= 5){
-  //   secondsCounter = 0;
-  //   mqttClient.publish("/hello", "world");
-  // }
-
-
-  // if(IMU.temperatureAvailable()){
-  //   int temperature_int = 0;
-  //   float temperature_float = 0;
-  //   IMU.readTemperature(temperature_int);
-  //   IMU.readTemperatureFloat(temperature_float);
-  //   // digitalWrite(LED_BUILTIN, HIGH);
-  //   // delay(100);
-  //   // digitalWrite(LED_BUILTIN, LOW);
-  //   // delay(100);
-  //   Serial.print("LSM6DSOX Temperature = ");
-  //   Serial.print(temperature_int);
-  //   Serial.print(" (");
-  //   Serial.print(temperature_float);
-  //   Serial.print(")");
-  //   Serial.println(" °C");
-  // }
+      mqttClient.beginMessage(topic);
+      mqttClient.print("Temperature is ");
+      sprintf(buffer, "%.2f", temperature_float);  // 2 decimal places
+      mqttClient.print(buffer);
+      mqttClient.print(" Degrees");
+      mqttClient.endMessage();
+    }
+  }
 }
