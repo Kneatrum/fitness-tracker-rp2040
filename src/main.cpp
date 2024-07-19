@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "secrets.h"
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 
 const char* ssid = SSID;
 const char* password = WIFIPASSWORD;
@@ -15,9 +17,15 @@ const char* password = WIFIPASSWORD;
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
 
+// Define NTP Client to get time
+WiFiUDP ntpUDP;
+const long utcOffsetInSeconds = 3 * 3600; // Offset for 3 hours ahead of UTC
+NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds, 60000);  // NTP server, Time offset in seconds, Update interval in milliseconds
+
 int status = WL_IDLE_STATUS;
 
-const char broker[] = "192.168.100.10"; // IP address of the mqtt host
+const char broker[] = "192.168.100.10"; // IP address of the mqtt host. 
+
 int mqtt_port = 1883;
 
 const char temperature[] = "measurement/temperature"; 
@@ -41,6 +49,8 @@ uint8_t secondsCounter = 0;
 bool wifi_connected = false;
 bool mqtt_connected = false;
 bool subscribed = false;
+
+int last_tiggered_second = -1;
 
 void pinInit(){
   pinMode(LED_BUILTIN, OUTPUT);
@@ -97,57 +107,43 @@ void setup() {
     wifi_connected = true;
   } 
 
+  // Initialize a NTPClient to get time
+  timeClient.begin();
+
   if(mqttConnect()){
     mqtt_connected = true;
   } 
    
-
 }
 
 void loop() {
 
   mqttClient.poll();
+  timeClient.update();
 
-  if(wifi_connected){
-    digitalWrite(LEDG, HIGH);
-    delay(100);
-    digitalWrite(LEDG, LOW);
-    delay(1000);
-  }
-
-
-  if(mqtt_connected){
-    digitalWrite(LEDR, HIGH);
-    digitalWrite(LEDG, HIGH);
-    digitalWrite(LEDB, HIGH);
-    delay(100);
-    digitalWrite(LEDR, LOW);
-    digitalWrite(LEDG, LOW);
-    digitalWrite(LEDB, LOW);
-    delay(1000);
-  }
-
-
+ 
   if(!mqttClient.connected()){
     mqttConnect();
   }
 
+  int currentSecond = timeClient.getSeconds();
+
   // publish a message roughly every second.
-  if (millis() - millisCounter >= 1000) {
-    millisCounter = millis();
-    secondsCounter++;
+  if( currentSecond % 5 == 0 && last_tiggered_second != currentSecond){
     if(IMU.temperatureAvailable()){
-      // int temperature_int = 0;
       float temperature_float = 0;
-      // IMU.readTemperature(temperature_int);
       IMU.readTemperatureFloat(temperature_float);
 
-      mqttClient.beginMessage(topic);
-      mqttClient.print("Temperature is ");
+      mqttClient.beginMessage(temperature);
+      // mqttClient.print("Temperature is ");
       sprintf(buffer, "%.2f", temperature_float);  // 2 decimal places
       mqttClient.print(buffer);
-      mqttClient.print(" Degrees");
+      // mqttClient.println(" Degrees");
+      // mqttClient.print("Time is ");
+      // mqttClient.println(timeClient.getFormattedTime());
       mqttClient.endMessage();
     }
+    last_tiggered_second =  currentSecond;
   }
+
 }
