@@ -56,6 +56,7 @@ bool mqtt_connected = false;
 bool subscribed = false;
 
 int last_tiggered_second = -1;
+int heart_last_tiggered_second = -1;
 
 void pinInit(){
   pinMode(LED_BUILTIN, OUTPUT);
@@ -105,13 +106,12 @@ void onBeatDetected()
 }
 
 void setup() {
-  Serial.begin(9600);
-  delay(100);
+  Serial1.begin(115200);
   pinInit();
 
   // while(!Serial);
   if(!IMU.begin()){
-    Serial.println("Failed to initialize IMU!");
+    Serial1.println("Failed to initialize IMU!");
     while (1);
   }
 
@@ -156,12 +156,8 @@ void loop() {
       IMU.readTemperatureFloat(temperature_float);
 
       mqttClient.beginMessage(temperature);
-      // mqttClient.print("Temperature is ");
       sprintf(buffer, "%.2f", temperature_float);  // 2 decimal places
       mqttClient.print(buffer);
-      // mqttClient.println(" Degrees");
-      // mqttClient.print("Time is ");
-      // mqttClient.println(timeClient.getFormattedTime());
       mqttClient.endMessage();
     }
     last_tiggered_second =  currentSecond;
