@@ -9,6 +9,8 @@
 #include "secrets.h"
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <Wire.h>
+#include "MAX30100_PulseOximeter.h"
 
 const char* ssid = SSID;
 const char* password = WIFIPASSWORD;
@@ -16,6 +18,9 @@ const char* password = WIFIPASSWORD;
 
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
+
+PulseOximeter pox;
+uint32_t tsLastReport = 0;
 
 // Define NTP Client to get time
 WiFiUDP ntpUDP;
@@ -91,6 +96,14 @@ bool mqttConnect() {
   
 }
 
+
+bool time_to_print = false;
+
+void onBeatDetected()
+{
+  time_to_print = true;
+}
+
 void setup() {
   Serial.begin(9600);
   delay(100);
@@ -113,6 +126,13 @@ void setup() {
   if(mqttConnect()){
     mqtt_connected = true;
   } 
+
+  while (!pox.begin()) {
+    Serial1.print("Initializing pulse oximeter..");
+    delay(1000);
+  }
+
+  pox.setOnBeatDetectedCallback(onBeatDetected);
    
 }
 
@@ -120,6 +140,7 @@ void loop() {
 
   mqttClient.poll();
   timeClient.update();
+  pox.update();
 
  
   if(!mqttClient.connected()){
@@ -144,6 +165,18 @@ void loop() {
       mqttClient.endMessage();
     }
     last_tiggered_second =  currentSecond;
+  }
+
+  int heartCurrentSecond = timeClient.getSeconds();
+  if( heartCurrentSecond % 5 == 0 && heart_last_tiggered_second != heartCurrentSecond && time_to_print){
+    // Serial1.print(pox.getSpO2());
+    mqttClient.beginMessage(heart);
+    float result = pox.getHeartRate();
+    sprintf(buffer, "%.2f", result);  // 2 decimal places
+    mqttClient.print(buffer);
+    mqttClient.endMessage();
+    heart_last_tiggered_second = heartCurrentSecond;
+    time_to_print = false;
   }
 
 }
