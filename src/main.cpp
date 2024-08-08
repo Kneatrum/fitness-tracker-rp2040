@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <Arduino_LSM6DSOX.h>
 #include <PDM.h> 
 #include <SPI.h>
 #include <WiFiNINA.h>
@@ -10,8 +9,8 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <Wire.h>
-#include "MAX30100_PulseOximeter.h"
-// #include "imufx.h"
+#include "imufx.h"
+#include "poxfx.h"
 
 const char* ssid = SSID;
 const char* password = WIFIPASSWORD;
@@ -20,8 +19,7 @@ const char* password = WIFIPASSWORD;
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
 
-PulseOximeter pox;
-uint32_t tsLastReport = 0;
+
 
 // Define NTP Client to get time
 WiFiUDP ntpUDP;
@@ -116,8 +114,6 @@ bool wifiConnect(){
 }
 
 
-
-
 bool mqttConnect() {
   uint8_t count = 1;
   Serial1.println("\nConnecting to MQTT broker");
@@ -139,23 +135,9 @@ bool mqttConnect() {
 }
 
 
-bool time_to_print = false;
-
-void onBeatDetected()
-{
-  time_to_print = true;
-}
-
 void setup() {
-    // Wire.begin();
+    Wire.begin();
     Serial1.begin(115200);
-    pinInit();
-
-    // while(!Serial);
-    // if(!IMU.begin()){
-    //     Serial1.println("Failed to initialize IMU!");
-    //     while (1);
-    // }
 
     // Connect to wifi
     if(wifiConnect()){
@@ -165,92 +147,61 @@ void setup() {
       } 
     }
 
-    // Initialize a NTPClient to get time
-    timeClient.begin();
+  // Initialize a NTPClient to get time
+  // timeClient.begin();
 
-
-    while (!pox.begin()) {
-        Serial1.print("Initializing pulse oximeter..");
-        delay(1000);
-    }
-
-  pox.setOnBeatDetectedCallback(onBeatDetected);
+  imu_mlc_init();
+  
+  pox_init();
    
-  //  imu_mlc_init();
   Serial1.println("\nHello world");
 }
 
 void loop() {
 
   mqttClient.poll();
-  timeClient.update();
   pox.update();
+  // timeClient.update();
+
 
  
   if(!mqttClient.connected()){
     mqttConnect();
   }
 
-  int currentSecond = timeClient.getSeconds();
-
-  // publish a message roughly every second.
-  if( currentSecond % 5 == 0 && last_tiggered_second != currentSecond){
-    // if(IMU.temperatureAvailable()){
-    //   float temperature_float = 0;
-    //   IMU.readTemperatureFloat(temperature_float);
-
-    //   mqttClient.beginMessage(temperature);
-    //   sprintf(buffer, "%.2f", temperature_float);  // 2 decimal places
-    //   mqttClient.print(buffer);
-    //   mqttClient.endMessage();
-    // }
-    Serial1.println("Alive");
-    last_tiggered_second =  currentSecond;
-  }
-
-  int heartCurrentSecond = timeClient.getSeconds();
-  if( heartCurrentSecond % 2 == 0 && heart_last_tiggered_second != heartCurrentSecond && time_to_print){
-    Serial1.print(pox.getSpO2());
-    mqttClient.beginMessage(heart);
-    float result = pox.getHeartRate();
-    Serial1.print("Heart rate = ");
-    Serial1.println(result);
-    sprintf(buffer, "%.2f", result);  // 2 decimal places
-    mqttClient.print(buffer);
-    mqttClient.endMessage();
-    heart_last_tiggered_second = heartCurrentSecond;
-    time_to_print = false;
-  }
-
-// if (mems_event)
-//   {
-//     mems_event=0;
-//     LSM6DSOX_MLC_Status_t mlc_status;
-//     AccGyr.Get_MLC_Status(&mlc_status);
-//     LSM6DSOX_Event_Status_t status;
-//     AccGyr.Get_X_Event_Status(&status);
-
-//     if (mlc_status.is_mlc1) {
-//       uint8_t mlc_out[8];
-//       AccGyr.Get_MLC_Output(mlc_out);
-//       printMLCStatus(mlc_out[0]);
-//     }
-    
-//     if (status.StepStatus)
-//     {
-//       // New step detected, so print the step counter
-//       AccGyr.Get_Step_Count(&step_count);
-//     }
-//   }
   
-//   // Print the step counter in any case every 3000 ms
-//   uint32_t current_tick = millis();
-//   if((current_tick - previous_tick) >= 3000)
-//   {
-//     snprintf(report, sizeof(report), "#Step counter: %d", step_count);
-//     Serial1.println(report);
-//     mqtt_send_str(steps, report);
-//     previous_tick = millis();
-//   }
+  if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
+    Serial1.print("Heart rate:");
+    Serial1.print(pox.getHeartRate());
+    Serial1.print("bpm / SpO2:");
+    Serial1.print(pox.getSpO2());
+    Serial1.println("%");
 
+    tsLastReport = millis();
+  }
+
+
+  if (mems_event){
+    mems_event=0;
+    LSM6DSOX_MLC_Status_t mlc_status;
+    AccGyr.Get_MLC_Status(&mlc_status);
+    LSM6DSOX_Event_Status_t status;
+    AccGyr.Get_X_Event_Status(&status);
+
+    if (mlc_status.is_mlc1) {
+      uint8_t mlc_out[8];
+      AccGyr.Get_MLC_Output(mlc_out);
+      printMLCStatus(mlc_out[0]);
+    }
+      
+    if (status.StepStatus){
+      // New step detected, so print the step counter
+      AccGyr.Get_Step_Count(&step_count);
+      snprintf(report, sizeof(report), "Step counter: %d", step_count);
+      Serial1.println(report);
+      mqtt_send_int(steps, step_count);
+
+    }
+  }
+  
 }
