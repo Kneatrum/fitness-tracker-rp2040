@@ -26,8 +26,8 @@ MAX30100::MAX30100()
 
 bool MAX30100::begin(unsigned long busSpeed)
 {
-    Wire.begin();
-    Wire.setClock(busSpeed);
+    // Wire.begin();
+    // Wire.setClock(busSpeed);
 
     if (getPartId() != EXPECTED_PART_ID)
     {
