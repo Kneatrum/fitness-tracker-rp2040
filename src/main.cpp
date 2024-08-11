@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "secrets.h"
-#include <NTPClient.h>
+// #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <Wire.h>
 #include "imufx.h"
@@ -19,18 +19,19 @@ const char* password = WIFIPASSWORD;
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
 
-
+#define HEART_O2_DATA_REPORTING_PERIOD_MS 1000
+uint32_t heartO2DataSampleTime;
 
 // Define NTP Client to get time
-WiFiUDP ntpUDP;
+// WiFiUDP ntpUDP;
 const long utcOffsetInSeconds = 3 * 3600; // Offset for 3 hours ahead of UTC
-NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds, 60000);  // NTP server, Time offset in seconds, Update interval in milliseconds
+// NTPClient timeClient(ntpUDP);  // NTP server, Time offset in seconds, Update interval in milliseconds
 
 int status = WL_IDLE_STATUS;
 
-const char broker[] = "192.168.101.47"; // IP address of the mqtt host. 
+const char broker[] = HOST; // IP address of the mqtt host. 
 
-int mqtt_port = 1883;
+int mqtt_port = PORT;
 
 const char temperature[] = "measurement/temperature"; 
 const char sound[] = "measurement/sound";
@@ -40,7 +41,9 @@ const char walking[] = "measurement/walking";
 const char jogging[] = "measurement/jogging";
 const char steps[] = "measurement/steps";
 const char biking[] = "measurement/biking";
+const char driving[] = "measurement/driving";
 const char idling[] = "measurement/idling";
+const char oxygen[] = "measurement/oxygen";
 
 const char topic[] = "test/topic";
 
@@ -57,8 +60,10 @@ bool subscribed = false;
 int last_tiggered_second = -1;
 int heart_last_tiggered_second = -1;
 
+int heart_rate = 0;
+int oxygen_concentration = 0;
+uint16_t last_step_count = 0;
 
-// uint16_t step_count = 0;
 char report[256];
 uint32_t previous_tick;
 
@@ -155,6 +160,10 @@ void setup() {
   pox_init();
    
   Serial1.println("\nHello world");
+  oneSecondRefreshTime = millis();
+  activityDataSampleTime = millis();
+  stepsDataSampleTime = millis();
+  heartO2DataSampleTime = millis();
 }
 
 void loop() {
@@ -164,19 +173,27 @@ void loop() {
   // timeClient.update();
 
 
- 
+  // Reconnect with the MQTT broker if not connected.  
   if(!mqttClient.connected()){
     mqttConnect();
   }
 
+  // Refresh the minutes counter after every one second.
+  if(millis() - oneSecondRefreshTime >= REPORTING_PERIOD_MS){
+    update_timers(REPORTING_PERIOD_MS);
+    // display_progress();
+    oneSecondRefreshTime = millis();
+  }
   
   if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
-    Serial1.print("Heart rate:");
-    Serial1.print(pox.getHeartRate());
-    Serial1.print("bpm / SpO2:");
-    Serial1.print(pox.getSpO2());
-    Serial1.println("%");
-
+    heart_rate = (int)pox.getHeartRate();
+    oxygen_concentration = (int)pox.getSpO2();
+    // Serial1.print(" Heart rate:");
+    // Serial1.print(heart_rate);
+    // Serial1.print("bpm / SpO2:");
+    // Serial1.print(oxygen_concentration);
+    // Serial1.print(" \r");
+    // display_progress();
     tsLastReport = millis();
   }
 
@@ -191,17 +208,59 @@ void loop() {
     if (mlc_status.is_mlc1) {
       uint8_t mlc_out[8];
       AccGyr.Get_MLC_Output(mlc_out);
-      printMLCStatus(mlc_out[0]);
+      getActivitySummary(mlc_out[0]);
     }
       
     if (status.StepStatus){
-      // New step detected, so print the step counter
+      // New step detected, so update the step counter
       AccGyr.Get_Step_Count(&step_count);
-      snprintf(report, sizeof(report), "Step counter: %d", step_count);
-      Serial1.println(report);
-      mqtt_send_int(steps, step_count);
-
     }
   }
-  
+
+
+  // Sending Oxygen concentration and Heart rate after every HEART_O2_DATA_REPORTING_PERIOD_MS (5 secponds)
+  if(millis() - heartO2DataSampleTime >= HEART_O2_DATA_REPORTING_PERIOD_MS){
+    // Filtering out any oxygen concentration value that is less than 60
+    if(oxygen_concentration > 60){
+      mqtt_send_int(oxygen, oxygen_concentration);
+    }
+    
+    // Filtering out any heart rate that is less than 50
+    if(heart_rate > 50){
+      mqtt_send_int(heart, heart_rate);
+    }
+    heartO2DataSampleTime = millis();
+  }
+
+
+  // Sending the number of steps after every STEPS_REPORTING_PERIOD_MS (5 seconds)
+  if(millis() - stepsDataSampleTime >= STEPS_REPORTING_PERIOD_MS){
+    // No need to send the current step count unless it is different from the previous one.
+    if(step_count !=  last_step_count){
+      mqtt_send_int(steps, step_count);
+      last_step_count = step_count;
+    }
+    stepsDataSampleTime = millis();
+  }
+
+
+  // Sending activity data after every ACTIVITY_REPORTING_PERIOD_MS (5 seconds)
+  if(millis() - activityDataSampleTime >= ACTIVITY_REPORTING_PERIOD_MS){
+    if(state.current == stationary_state){
+      mqtt_send_float(idling, activity_minutes.stationary);
+    } else if(state.current == walking_state){
+      mqtt_send_float(walking, activity_minutes.walking);
+    } else if(state.current == jogging_state){
+      mqtt_send_float(jogging, activity_minutes.jogging);
+    } else if(state.current == biking_state){
+      mqtt_send_float(biking, activity_minutes.biking);
+    } else if(state.current == driving_state){
+      mqtt_send_float(driving, activity_minutes.driving);
+    } else if(state.current == unknown_state){
+      // mqtt_send_float("others", activity_minutes.unknown); 
+    }
+
+    activityDataSampleTime = millis();
+  }
+
 }
