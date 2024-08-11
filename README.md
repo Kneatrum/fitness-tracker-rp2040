@@ -18,3 +18,4 @@ The data collected from the sensors is sent to a Node.js backend via MQTT for an
    * GND to GND
    * SDA to GPIO12 (I2C SDA)
    * SCL to GPIO13 (I2C SCL)
+2. The LSM6DSO IMU is already connected to the rp2040 microcontroller on the PCB.
