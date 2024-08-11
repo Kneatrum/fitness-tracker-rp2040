@@ -3,8 +3,7 @@
 This project uses a Nano RP2040 board connected to an external heart rate monitor to track various fitness and health activities.
 The Nano RP2040 board has a Raspberry Pi RP2040 microcontroller and an inbuilt 6-axis Inertia Measurement Unit (IMU) with a dedicated
 machine learning core that will help us detect activities such as walking and jogging.
-The data collected from the sensors is sent to a Node.js backend via MQTT for analysis.
-
+The data is transmitted via MQTT to an IoT server built with a Node.js backend, stored in an InfluxDB database, and visualized on a React dashboard. You can find the complete project on [this](https://github.com/Kneatrum/iot-server) repository.
 ## Components 
 * Nano-RP2040 microcontroller
 * MAX30100 heart rate and SpO2 sensor
