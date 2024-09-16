@@ -15,6 +15,14 @@ extern uint32_t activityDataSampleTime;
 extern uint32_t stepsDataSampleTime;
 extern LSM6DSOXSensor AccGyr;
 
+///sleep variables
+extern long timer;
+extern long sleep_timer_start, sleep_timer_end,sleep_timer_end2;
+extern float x,y,z;
+extern int activate, interrupt, stage_sleep_time, interrupt_sleep_timer,
+interrupt_for_deep_sleep, total_sleep, total_deep_sleep, 
+total_light_sleep, deep_sleep, light_sleep, interrupt_timer;
+
 extern int32_t LineCounter;
 extern int32_t TotalNumberOfLine;
 
@@ -55,17 +63,17 @@ struct sleepTime {
     uint32_t deepSleepMinutes;
 };
 
-struct Switch{
+typedef struct {
     uint8_t current;
     unsigned long current_timestamp;
     uint8_t previous;
     unsigned long previous_timestamp;
     double prev_state_time_taken;
-};
+} TransitionDetails;
 
-extern Switch state;
+extern TransitionDetails state;
 
-Switch InitializeSwitch();
+TransitionDetails InitializeTransitionDetails();
 
 
 void getActivitySummary(uint8_t state);
@@ -81,6 +89,8 @@ bool load_mlc_program();
 void printMLCStatus(uint8_t status);
 
 void imu_mlc_init();
+
+void sleep_tracking();
 
 void INT1Event_cb();
 

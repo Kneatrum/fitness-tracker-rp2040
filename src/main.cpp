@@ -263,4 +263,10 @@ void loop() {
     activityDataSampleTime = millis();
   }
 
+  // Sleep tracking
+  if(millis() - timer > 1000){ 
+    sleep_tracking();
+    timer = millis();
+  }  
+
 }
