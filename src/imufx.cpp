@@ -164,6 +164,10 @@ void imu_mlc_init(){
     if(load_mlc_program()){
         Serial1.println("Program loaded inside the LSM6DSOX MLC");
     }
+
+    AccGyr.Enable_X();
+    AccGyr.Enable_G();
+    
     AccGyr.Enable_Pedometer();
 
     delay(3000);
