@@ -158,8 +158,6 @@ void imu_mlc_init(){
     attachInterrupt(INT_1, INT1Event_cb, RISING);
 
     AccGyr.begin();
-    AccGyr.Enable_X();
-    AccGyr.Enable_G();
 
     if(load_mlc_program()){
         Serial1.println("Program loaded inside the LSM6DSOX MLC");
