@@ -1,4 +1,5 @@
 # Nano-RP2040 Fitness Tracker
+![Dashboard Screenshot](Dashboard.jpg)
 ## Overview
 This project uses a Nano RP2040 board connected to an external heart rate monitor to track various fitness and health activities.
 The Nano RP2040 board has a Raspberry Pi RP2040 microcontroller and an inbuilt 6-axis Inertia Measurement Unit (IMU) with a dedicated
